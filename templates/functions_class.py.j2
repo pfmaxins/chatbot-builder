@@ -63,7 +63,6 @@ class Functions(Tools):
 
             {%- endif %}
 
-
         # No extra functions
         self.tools_one = []
 
@@ -98,6 +97,11 @@ class Functions(Tools):
 
     {%- if services.get('db', {}).get('enabled') %}
     def query_database(self, query):
+        {% if services.get('vpn', {}).get('enabled') %}
+        if not self.connect_vpn():
+            return json.dumps({"success": False, "error": "VPN connection failed."})
+        {% endif %}
+
         try:
             with self.psql_engine.connect() as connection:
                 result = connection.execute(sqlalchemy.text(query))

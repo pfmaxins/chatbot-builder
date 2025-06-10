@@ -45,6 +45,79 @@ class Tools:
 
         self.psql_schema = db_schema
         {% endif %}
+        {% if services.get('vpn', {}).get('enabled') %}
+        import subprocess
+        import time
+        import os
+
+        def is_vpn_connected(self):
+            """Check if VPN is connected by looking for openfortivpn processes"""
+            try:
+                result = subprocess.run(
+                    ["pgrep", "openfortivpn"],
+                    capture_output=True,
+                    check=False
+                )
+                return result.returncode == 0
+            except Exception:
+                return False
+
+        def connect_vpn(self):
+            """Connect to VPN using openfortivpn with sudo"""
+            try:
+                print("Connecting to VPN...")
+                
+                # Kill any existing openfortivpn processes
+                subprocess.run(
+                    ["sudo", "pkill", "-f", "openfortivpn"],
+                    capture_output=True,
+                    check=False
+                )
+                
+                time.sleep(2)
+                
+                # Start VPN connection in background
+                config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "openfortivpn.conf")
+                
+                if not os.path.exists(config_path):
+                    print(f"VPN config file not found at {config_path}")
+                    return False
+                
+                cmd = ["sudo", "openfortivpn", "-c", config_path]
+                
+                print(f"Starting VPN with command: {' '.join(cmd)}")
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                
+                # Wait for connection to establish
+                for _ in range(30):  # 30 seconds timeout
+                    if self.is_vpn_connected():
+                        print("VPN connected successfully!")
+                        return True
+                    time.sleep(1)
+                
+                print("VPN connection timeout - proceeding anyway")
+                return False
+                
+            except Exception as e:
+                print(f"Error connecting to VPN: {e}")
+                return False
+
+        def disconnect_vpn(self):
+            """Disconnect VPN using sudo"""
+            try:
+                subprocess.run(
+                    ["sudo", "pkill", "-f", "openfortivpn"],
+                    capture_output=True,
+                    check=False
+                )
+                print("VPN disconnected.")
+            except Exception as e:
+                print(f"Error disconnecting VPN: {e}")
+        {% endif %}
 
     def setup_client(self):
         configs = [
@@ -64,6 +137,7 @@ class Tools:
                 continue
 
         raise RuntimeError("No valid API client could be set up.")
+
 
 if __name__ == "__main__":
     tools = Tools()

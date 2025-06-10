@@ -1,0 +1,127 @@
+{# templates/app.py.j2 - Simplified Streamlit Frontend #}
+import streamlit as st
+import requests
+import uuid
+import os
+import base64
+import json
+from datetime import datetime
+from PIL import Image
+import io
+
+# Page configuration
+st.set_page_config(
+    page_title="{{ project_name | title }} - Asistente Virtual",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+def initialize_session_state():
+    """Initialize session state variables"""
+    if 'conversation_key' not in st.session_state:
+        st.session_state.conversation_key = str(uuid.uuid4())
+    if 'messages' not in st.session_state:
+        st.session_state.messages = []
+
+def save_image(image_base64, timestamp):
+    """Save image to folder and return path"""
+    folder = "generated_images"
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+    
+    filename = f"image_{timestamp}.png"
+    filepath = os.path.join(folder, filename)
+    
+    image_data = base64.b64decode(image_base64)
+    with open(filepath, 'wb') as f:
+        f.write(image_data)
+    
+    return filepath
+
+def send_message_to_backend(message, backend_url):
+    """Send message to chatbot backend"""
+    payload = {
+        "message": message,
+        "phone_number": st.session_state.conversation_key
+    }
+    
+    try:
+        response = requests.post(f"{backend_url}/chat", json=payload, timeout=60)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            st.error(f"Backend error: {response.status_code}")
+            return None
+    except requests.exceptions.RequestException as e:
+        st.error(f"Connection error: {str(e)}")
+        return None
+
+def main():
+    # Initialize session state
+    initialize_session_state()
+    
+    # Main header
+    st.markdown(f'<h1 class="main-header">🤖 {{ project_name | title }} Assistant</h1>', unsafe_allow_html=True)
+    
+    # Sidebar configuration
+    with st.sidebar:
+        st.markdown('<div class="sidebar-content">', unsafe_allow_html=True)
+        
+        # Auto-detect backend URL
+        {% if network.enabled %}
+        backend_url = f"http://{{ project_name }}:{{ services.app.internal_port }}"
+        {% else %}
+        backend_url = f"http://localhost:{{ services.app.internal_port }}"
+        {% endif %}
+        
+        st.markdown("## 🔐 Session Info")
+        st.text(f"Session: {st.session_state.conversation_key[:8]}...")
+    
+    # Display chat messages
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+    
+    # Chat input
+    if prompt := st.chat_input("Type your message here..."):
+        # Add user message
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        
+        # Send to backend and display response
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                response_data = send_message_to_backend(prompt, backend_url)
+            
+            if response_data:
+                bot_response = response_data.get("response", "No response received")
+                st.markdown(bot_response)
+                
+                # Add bot response to history
+                st.session_state.messages.append({"role": "assistant", "content": bot_response})
+                
+                # Handle images if present
+                type_url = response_data.get("typeUrl")
+                if type_url:
+                    try:
+                        type_data = json.loads(type_url)
+                        if type_data.get("success") and type_data.get("image_base64"):
+                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            filepath = save_image(type_data["image_base64"], timestamp)
+                            
+                            # Display image
+                            image_bytes = base64.b64decode(type_data["image_base64"])
+                            image = Image.open(io.BytesIO(image_bytes))
+                            st.image(image, caption=f"Generated - {timestamp}")
+                            st.success(f"Image saved as {filepath}")
+                    except json.JSONDecodeError:
+                        st.info(f"Additional info: {type_url}")
+            else:
+                error_msg = "Sorry, couldn't connect to the system."
+                st.error(error_msg)
+                st.session_state.messages.append({"role": "assistant", "content": error_msg})
+
+if __name__ == "__main__":
+    main()
