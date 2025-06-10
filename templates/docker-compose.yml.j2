@@ -46,11 +46,15 @@ services:
   frontend-{{ project_name }}:
     build:
       context: .
+      dockerfile: Dockerfile.frontend
     ports:
       - "{{ frontend.external_port }}:{{ frontend.internal_port }}"
+    depends_on:
+      - {{ project_name }}
 {% if network.enabled %}
     networks:
       - {{ network.name }}
+{% endif %}
 {% endif %}
 
 {% if services.db.enabled and not services.db.external %}
@@ -68,5 +72,4 @@ networks:
     {% else %}
     driver: bridge
     {% endif %}
-{% endif %}
 {% endif %}

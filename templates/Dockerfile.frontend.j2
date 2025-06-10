@@ -1,0 +1,44 @@
+# Use Python 3.11 slim image for better performance
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV STREAMLIT_SERVER_PORT={{ frontend.internal_port }}
+ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
+ENV STREAMLIT_SERVER_HEADLESS=true
+ENV STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+ENV DOCKER_CONTAINER=true
+
+# Install system dependencies (minimal)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy and install Python dependencies first (for better caching)
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
+
+# Copy only necessary files
+COPY app.py .
+
+# Create streamlit config directory and copy config if it exists
+RUN mkdir -p /app/.streamlit
+COPY .streamlit/config.toml .streamlit/config.toml* || true
+
+# Create directory for image storage
+RUN mkdir -p /app/generated_images
+
+# Expose the Streamlit port
+EXPOSE {{ frontend.internal_port }}
+
+# Health check (simplified)
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:{{ frontend.internal_port }}/_stcore/health || exit 1
+
+# Run Streamlit
+CMD ["streamlit", "run", "app.py", "--server.port={{ frontend.internal_port }}", "--server.address=0.0.0.0"]

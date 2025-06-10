@@ -69,7 +69,13 @@ async def process_message(request: MessageRequest):
 
 @app.get("/health")
 def health_check():
-    health = {{% if services.db.enabled %}"database": False{% endif %}{% if services.redis %}, "redis": False{% endif %}}
+    health = {}
+    {% if services.db.enabled %}
+    health["database"] = False
+    {% endif %}
+    {% if services.redis %}
+    health["redis"] = False
+    {% endif %}
     {% if services.redis %}
     try:
         health["redis"] = redis_client.ping()
