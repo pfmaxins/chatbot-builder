@@ -1,0 +1,26 @@
+# Use the slim Python 3.12 image as the base
+FROM python:3.12-slim
+
+# Prevent Python from writing .pyc files
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Ensure stdout and stderr are unbuffered
+ENV PYTHONUNBUFFERED=1
+
+# Set the working directory to /app
+WORKDIR /app
+
+# Copy requirements.txt to /app/
+COPY requirements.txt /app/
+
+# Upgrade pip and install dependencies
+RUN pip install --no-cache-dir --upgrade pip && pip install -r requirements.txt
+
+# Copy all application code to /app/
+COPY . /app/
+
+# Expose the application port dynamically
+EXPOSE 8013
+
+# Start the application with Uvicorn
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8013"]

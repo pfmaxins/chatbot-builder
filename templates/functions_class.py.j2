@@ -1,0 +1,128 @@
+{# templates/functions_class.py.j2 #}
+import json
+from dotenv import load_dotenv
+from .tools_class import Tools
+
+class Functions(Tools):
+    def __init__(self):
+        # Load environment variables and client
+        load_dotenv()
+
+        # Initialize parent class and setup client
+        super().__init__()
+        self.setup_client()
+
+        {%- if services.get('vectorbase', {}).get('enabled') %}
+
+        # Function declarations
+        answer_with_rag_tool = {
+            "type": "function",
+            "function": {
+                "name": "answer_with_rag",
+                "description": (
+                    "Answers the user's question using Retrieval-Augmented Generation (RAG). "
+                    "Use this tool when the user asks for information that requires information you may not have."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The user's question or query to be answered using RAG."
+                        }
+                    },
+                    "required": ["query"],
+                    "additionalProperties": False
+                }
+            }
+        }
+
+        {%- endif %}
+
+        {%- if services.get('db', {}).get('enabled') %}
+
+            query_database_tool = {
+                "type": "function",
+                "function": {
+                "name": "query_database",
+                "description": "Writes a PostgreSQL query and executes it to retrieve information. Database schema: " + getattr(self, "psql_schema", ""),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The PostgreSQL query to be executed. Must end with a semicolon (;).",
+                        "pattern": ".*;\\s*$"
+                    }
+                    },
+                    "additionalProperties": False,
+                    "required": ["query"]
+                }
+                }
+            }
+
+            {%- endif %}
+
+
+        # No extra functions
+        self.tools_one = []
+
+    {%- if services.get('vectorbase', {}).get('enabled') %}
+
+    def answer_with_rag(self, query):
+        try:
+            response = self.client.responses.create(
+                model="gpt-4o",
+                input=query,
+                tools=[{
+                    "type": "file_search",
+                    "vector_store_ids": [self.vector_store_id],
+                }]
+            )
+
+            # Extract the output text from the response object
+            output_text = None
+            for item in response.output:
+                if getattr(item, "type", None) == "message":
+                    for content in getattr(item, "content", []):
+                        if getattr(content, "type", None) == "output_text":
+                            output_text = content.text
+                            break
+
+            return json.dumps({"success": True, "rag_result": output_text})
+        except Exception as e:
+            print("Error in answer_with_rag:", e)
+            return json.dumps({"success": False, "error": str(e)})
+
+    {%- endif %}
+
+    {%- if services.get('db', {}).get('enabled') %}
+    def query_database(self, query):
+        try:
+            with self.psql_engine.connect() as connection:
+                result = connection.execute(sqlalchemy.text(query))
+                rows = result.fetchall()
+                return json.dumps({"success": True, "rows": [dict(row) for row in rows]})
+        except Exception as e:
+            return json.dumps({"success": False, "error": str(e)})
+
+    {%- endif %}
+
+    def setup_client(self):
+        configs = [
+            {"key_env": "OPENAI_API_KEY", "base_url": "https://api.openai.com/v1"},
+            {"key_env": "GEMINI_API_KEY", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/"},
+            {"key_env": "DEEPSEEK_API_KEY", "base_url": "https://api.deepseek.com"},
+        ]
+
+        for config in configs:
+            api_key = os.getenv(config["key_env"])
+            if not api_key:
+                continue
+            try:
+                self.client = openai.OpenAI(api_key=api_key, base_url=config["base_url"])
+                return
+            except Exception:
+                continue
+
+        raise RuntimeError("No valid API client could be set up.")

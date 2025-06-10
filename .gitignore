@@ -1,0 +1,9 @@
+.venv
+.env
+test*
+init.sql
+test*
+files
+scripts
+jsons
+!builder

@@ -1,0 +1,72 @@
+services:
+  {{ project_name }}:
+    build:
+      context: .
+    ports:
+      - "{{ services.app.external_port }}:{{ services.app.internal_port }}"
+    env_file:
+      - {{ services.app.env_file }}
+    depends_on:
+{% if services.db.enabled and not services.db.external %}
+      - db-{{ project_name }}
+{% endif %}
+      - redis-{{ project_name }}
+{% if network.enabled %}
+    networks:
+      - {{ network.name }}
+{% endif %}
+
+  redis-{{ project_name }}:
+    image: {{ services.redis.image }}
+    ports:
+      - "{{ services.redis.external_port }}:{{ services.redis.internal_port }}"
+{% if network.enabled %}
+    networks:
+      - {{ network.name }}
+{% endif %}
+
+{% if services.db.enabled and not services.db.external %}
+  db-{{ project_name }}:
+    image: {{ services.db.image }}
+    env_file:
+      - {{ services.db.env_file }}
+    volumes:
+{% for vol in services.db.volumes %}
+      - {{ vol }}
+{% endfor %}
+    ports:
+      - "{{ services.db.external_port }}:5432"
+{% if network.enabled %}
+    networks:
+      - {{ network.name }}
+{% endif %}
+{% endif %}
+
+{% if frontend.enabled %}
+  frontend-{{ project_name }}:
+    build:
+      context: .
+    ports:
+      - "{{ frontend.external_port }}:{{ frontend.internal_port }}"
+{% if network.enabled %}
+    networks:
+      - {{ network.name }}
+{% endif %}
+
+{% if services.db.enabled and not services.db.external %}
+volumes:
+{% for vname, vconf in volumes.items() %}
+  {{ vname }}: {{ vconf|tojson }}
+{% endfor %}
+{% endif %}
+
+{% if network.enabled %}
+networks:
+  {{ network.name }}:
+    {% if network.external is defined and network.external %}
+    external: true
+    {% else %}
+    driver: bridge
+    {% endif %}
+{% endif %}
+{% endif %}

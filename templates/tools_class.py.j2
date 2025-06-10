@@ -1,0 +1,76 @@
+# Dynamic service initialization based on config.json
+import os
+from dotenv import load_dotenv
+from sqlalchemy import create_engine, inspect
+import openai
+
+class Tools:
+    def __init__(self):
+        # Load environment variables and client
+        load_dotenv()
+        self.setup_client()
+
+        {% if services.get('vectorbase', {}).get('enabled') %}
+        # Initialize vector store ID for RAG
+        result = self.client.vector_stores.files.list(
+            vector_store_id=os.getenv("VECTOR_STORE_ID")
+        )
+        self.vector_store_id = result.data[0].vector_store_id
+        {% endif %}
+
+        {% if services.get('db', {}).get('enabled') %}
+        # Setup PostgreSQL engine and reflect schema
+        db_user = os.getenv("POSTGRES_USER")
+        db_password = os.getenv("POSTGRES_PASSWORD")
+        db_host = os.getenv("POSTGRES_HOST")
+        db_port = os.getenv("POSTGRES_PORT")
+        db_name = os.getenv("POSTGRES_DB")
+
+        self.psql_engine = create_engine(
+            f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+        )
+
+        # Create a database schema for the LLM model
+        with self.psql_engine.connect():
+            # Get the table names
+            table_names = inspect(self.psql_engine).get_table_names()
+
+            db_schema = ""
+            for table_name in table_names:
+                db_schema += f"Table: {table_name}\n"
+                columns = inspect(self.psql_engine).get_columns(table_name)
+                for column in columns:
+                    db_schema += f"  Column: {column['name']} ({column['type']})\n"
+                db_schema += "\n"
+
+        self.psql_schema = db_schema
+        {% endif %}
+
+    def setup_client(self):
+        configs = [
+            {"key_env": "OPENAI_API_KEY", "base_url": "https://api.openai.com/v1"},
+            {"key_env": "GEMINI_API_KEY", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/"},
+            {"key_env": "DEEPSEEK_API_KEY", "base_url": "https://api.deepseek.com"},
+        ]
+
+        for config in configs:
+            api_key = os.getenv(config["key_env"])
+            if not api_key:
+                continue
+            try:
+                self.client = openai.OpenAI(api_key=api_key, base_url=config["base_url"])
+                return
+            except Exception:
+                continue
+
+        raise RuntimeError("No valid API client could be set up.")
+
+if __name__ == "__main__":
+    tools = Tools()
+    print("Tools initialized successfully.")
+    {% if services.get('db', {}).get('enabled') %}
+    print("PostgreSQL schema:", tools.psql_schema)
+    {% endif %}
+    {% if services.get('vectorbase', {}).get('enabled') %}
+    print("Vector store ID:", tools.vector_store_id)
+    {% endif %}

@@ -1,0 +1,100 @@
+import json
+import copy
+
+from dotenv import load_dotenv
+from scripts.functions_class import Functions
+
+class Assistant(Functions):
+    def __init__(self):
+        # Initialize parent (loads env, tools, etc.)
+        super().__init__()
+        load_dotenv()
+
+        # Default conversation state
+        self.default_state = {
+            "messages": [
+                { "role": "system", "content": {{ system_prompt | tojson }} }
+            ],
+            "tools": self.tools_one
+        }
+
+    def get_response(self, user_prompt, state, max_tokens=300):
+        # Copy state for the LLM call
+        internal = copy.deepcopy(state)
+        typeUrl = None
+
+        # Append user message
+        internal["messages"].append({"role": "user", "content": user_prompt})
+
+        # First chat call (may request a tool)
+        try:
+            completion = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=internal["messages"],
+                tools=internal["tools"],
+                max_completion_tokens=max_tokens,
+            )
+        except:
+            # If the client died, re-init and retry
+            self.setup_client()
+            return self.get_response(user_prompt, state)
+
+        # Record the user turn
+        state["messages"].append({"role": "user", "content": user_prompt})
+
+        # If no tool call was requested, return assistant content
+        if completion.choices[0].message.tool_calls is None:
+            text = completion.choices[0].message.content
+            state["messages"].append({"role": "assistant", "content": text})
+            return text, state, typeUrl
+
+        # Otherwise, handle tool calls
+        internal["messages"].append(completion.choices[0].message)
+        for call in completion.choices[0].message.tool_calls:
+            name = call.function.name
+            args = json.loads(call.function.arguments)
+
+            if hasattr(self, name):
+                func = getattr(self, name)
+                try:
+                    # Some functions (e.g. create_user) expect state
+                    result = func(state=state, **args)
+                except TypeError:
+                    result = func(**args)
+            else:
+                print(f"Unknown function: {name}")
+                continue
+
+            # Append tool result into the conversation
+            internal["messages"].append({
+                "role": "tool",
+                "tool_call_id": call.id,
+                "content": json.dumps(result),
+            })
+
+        # Second chat call to get the final assistant response
+        try:
+            completion2 = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=internal["messages"],
+                max_completion_tokens=max_tokens,
+            )
+        except Exception:
+            self.setup_client()
+            return self.get_response(user_prompt, state)
+
+        final = completion2.choices[0].message.content
+        state["messages"].append({"role": "assistant", "content": final})
+        return final, state, typeUrl
+
+
+if __name__ == "__main__":
+    assistant = Assistant()
+    state = assistant.default_state
+    while True:
+        prompt = input("User: ")
+        resp, state, typeUrl = assistant.get_response(prompt, state)
+        print(f"Bot: {resp}")
+        if typeUrl:
+            print(f"Type URL: {typeUrl}")
+        print("\n")
