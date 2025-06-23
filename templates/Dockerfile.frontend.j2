@@ -26,9 +26,11 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Copy only necessary files
 COPY app.py .
 
-# Create streamlit config directory and copy config if it exists
+# Create streamlit config directory
 RUN mkdir -p /app/.streamlit
-COPY .streamlit/config.toml .streamlit/config.toml* || true
+
+# Copy streamlit config if it exists (using shell to handle optional file)
+COPY .streamlit/ .streamlit/
 
 # Create directory for image storage
 RUN mkdir -p /app/generated_images
