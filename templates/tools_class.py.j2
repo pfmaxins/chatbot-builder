@@ -132,7 +132,8 @@ class Tools:
                     base_url=config["base_url"]
                 )
                 return
-            except Exception:
+            except Exception as e:
+                print(f"Client {config['key_env']} failed: {e}")
                 continue
 
         raise RuntimeError("No valid API client could be set up.")
