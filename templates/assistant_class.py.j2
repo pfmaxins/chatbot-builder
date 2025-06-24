@@ -10,14 +10,6 @@ class Assistant(Functions):
         super().__init__()
         load_dotenv()
 
-        # Default conversation state
-        self.default_state = {
-            "messages": [
-                { "role": "system", "content": {{ system_prompt | tojson }} }
-            ],
-            "tools": self.tools_one
-        }
-
     def get_response(self, user_prompt, state, max_tokens=300):
         # Copy state for the LLM call
         internal = copy.deepcopy(state)

@@ -68,6 +68,14 @@ class Functions(Tools):
         self.tools_one.append(query_database_tool)
         {% endif %}
 
+        # Default conversation state
+        self.default_state = {
+            "messages": [
+                { "role": "system", "content": {{ system_prompt | tojson }} }
+            ],
+            "tools": self.tools_one
+        }
+
     {% if services.get('vectorbase', {}).get('enabled') %}
     def answer_with_rag(self, query):
         try:
