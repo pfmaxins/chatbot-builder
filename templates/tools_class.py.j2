@@ -1,7 +1,6 @@
 # Dynamic service initialization based on config.json
 import os
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, inspect
 import openai
 
 class Tools:
@@ -17,8 +16,9 @@ class Tools:
         )
         self.vector_store_id = result.data[0].vector_store_id
         {% endif %}
-
         {% if services.get('db', {}).get('enabled') %}
+        from sqlalchemy import create_engine, inspect
+        
         # Setup PostgreSQL engine and reflect schema
         db_user = os.getenv("POSTGRES_USER")
         db_password = os.getenv("POSTGRES_PASSWORD")
@@ -66,42 +66,38 @@ class Tools:
             """Connect to VPN using openfortivpn with sudo"""
             try:
                 print("Connecting to VPN...")
-                
-                # Kill any existing openfortivpn processes
                 subprocess.run(
                     ["sudo", "pkill", "-f", "openfortivpn"],
                     capture_output=True,
                     check=False
                 )
-                
                 time.sleep(2)
-                
-                # Start VPN connection in background
-                config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "openfortivpn.conf")
-                
+                config_path = os.path.join(
+                    os.path.dirname(os.path.dirname(__file__)),
+                    "openfortivpn.conf"
+                )
                 if not os.path.exists(config_path):
                     print(f"VPN config file not found at {config_path}")
                     return False
-                
+
                 cmd = ["sudo", "openfortivpn", "-c", config_path]
-                
                 print(f"Starting VPN with command: {' '.join(cmd)}")
                 process = subprocess.Popen(
                     cmd,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE
                 )
-                
+
                 # Wait for connection to establish
-                for _ in range(30):  # 30 seconds timeout
+                for _ in range(30):
                     if self.is_vpn_connected():
                         print("VPN connected successfully!")
                         return True
                     time.sleep(1)
-                
+
                 print("VPN connection timeout - proceeding anyway")
                 return False
-                
+
             except Exception as e:
                 print(f"Error connecting to VPN: {e}")
                 return False
@@ -131,7 +127,10 @@ class Tools:
             if not api_key:
                 continue
             try:
-                self.client = openai.OpenAI(api_key=api_key, base_url=config["base_url"])
+                self.client = openai.OpenAI(
+                    api_key=api_key,
+                    base_url=config["base_url"]
+                )
                 return
             except Exception:
                 continue

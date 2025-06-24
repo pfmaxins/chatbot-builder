@@ -1,6 +1,6 @@
 import json
 import copy
-
+import os
 from dotenv import load_dotenv
 from scripts.functions_class import Functions
 
@@ -64,6 +64,11 @@ class Assistant(Functions):
             else:
                 print(f"Unknown function: {name}")
                 continue
+
+            # Check if the result has a typeUrl
+            result = json.loads(result) if isinstance(result, str) else result
+            if "typeUrl" in result:
+                typeUrl = result["typeUrl"]
 
             # Append tool result into the conversation
             internal["messages"].append({

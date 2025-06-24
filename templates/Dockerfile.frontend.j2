@@ -38,9 +38,5 @@ RUN mkdir -p /app/generated_images
 # Expose the Streamlit port
 EXPOSE {{ frontend.internal_port }}
 
-# Health check (simplified)
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:{{ frontend.internal_port }}/_stcore/health || exit 1
-
 # Run Streamlit
 CMD ["streamlit", "run", "app.py", "--server.port={{ frontend.internal_port }}", "--server.address=0.0.0.0"]

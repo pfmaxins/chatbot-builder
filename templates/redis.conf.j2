@@ -1,0 +1,42 @@
+# Enable AOF (Append Only File) persistence - logs every write operation
+# This ensures data durability by writing each command to disk
+appendonly yes
+appendfilename "appendonly.aof"
+# Sync to disk every second (balance between performance and safety)
+appendfsync everysec
+
+# Enable RDB (Redis Database) snapshots - creates point-in-time backups
+# save <seconds> <changes> - save if X changes happen in Y seconds
+# Save if at least 1 key changed in 900 seconds (15 minutes)
+save 900 1
+# Save if at least 10 keys changed in 300 seconds (5 minutes)
+save 300 10
+# Save if at least 10000 keys changed in 60 seconds (1 minute)
+save 60 10000
+
+# Memory management settings
+# Limit memory usage to 256 MB
+maxmemory 256mb
+# Never remove keys automatically, store all conversations
+maxmemory-policy noeviction
+
+# Security setting for Docker internal network
+# Allow connections from other containers (safe in isolated network)
+protected-mode no
+
+# Performance and reliability settings
+# Keep connections alive
+tcp-keepalive 300
+# No client timeout
+timeout 0
+# Number of databases
+databases 1
+
+# Logging
+loglevel notice
+# Log to stdout (good for Docker)
+logfile ""
+
+# Persistence directory
+# This should match your Docker volume mount point
+dir /data

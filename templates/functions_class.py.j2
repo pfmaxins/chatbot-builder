@@ -2,6 +2,8 @@
 import json
 from dotenv import load_dotenv
 from .tools_class import Tools
+import openai
+import os
 
 class Functions(Tools):
     def __init__(self):
@@ -12,9 +14,10 @@ class Functions(Tools):
         super().__init__()
         self.setup_client()
 
-        {%- if services.get('vectorbase', {}).get('enabled') %}
+        # Initialize tools list
+        self.tools_one = []
 
-        # Function declarations
+        {% if services.get('vectorbase', {}).get('enabled') %}
         answer_with_rag_tool = {
             "type": "function",
             "function": {
@@ -36,38 +39,36 @@ class Functions(Tools):
                 }
             }
         }
+        self.tools_one.append(answer_with_rag_tool)
+        {% endif %}
 
-        {%- endif %}
-
-        {%- if services.get('db', {}).get('enabled') %}
-
-            query_database_tool = {
-                "type": "function",
-                "function": {
+        {% if services.get('db', {}).get('enabled') %}
+        query_database_tool = {
+            "type": "function",
+            "function": {
                 "name": "query_database",
-                "description": "Writes a PostgreSQL query and executes it to retrieve information. Database schema: " + getattr(self, "psql_schema", ""),
+                "description": (
+                    "Writes a PostgreSQL query and executes it to retrieve information. "
+                    "Database schema: " + getattr(self, "psql_schema", "")
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "The PostgreSQL query to be executed. Must end with a semicolon (;).",
-                        "pattern": ".*;\\s*$"
-                    }
+                        "query": {
+                            "type": "string",
+                            "description": "The PostgreSQL query to be executed. Must end with a semicolon (;).",
+                            "pattern": ".*;\\s*$"
+                        }
                     },
-                    "additionalProperties": False,
-                    "required": ["query"]
-                }
+                    "required": ["query"],
+                    "additionalProperties": False
                 }
             }
+        }
+        self.tools_one.append(query_database_tool)
+        {% endif %}
 
-            {%- endif %}
-
-        # No extra functions
-        self.tools_one = []
-
-    {%- if services.get('vectorbase', {}).get('enabled') %}
-
+    {% if services.get('vectorbase', {}).get('enabled') %}
     def answer_with_rag(self, query):
         try:
             response = self.client.responses.create(
@@ -92,25 +93,20 @@ class Functions(Tools):
         except Exception as e:
             print("Error in answer_with_rag:", e)
             return json.dumps({"success": False, "error": str(e)})
+    {% endif %}
 
-    {%- endif %}
-
-    {%- if services.get('db', {}).get('enabled') %}
+    {% if services.get('db', {}).get('enabled') %}
     def query_database(self, query):
-        {% if services.get('vpn', {}).get('enabled') %}
-        if not self.connect_vpn():
-            return json.dumps({"success": False, "error": "VPN connection failed."})
-        {% endif %}
-
         try:
             with self.psql_engine.connect() as connection:
-                result = connection.execute(sqlalchemy.text(query))
-                rows = result.fetchall()
-                return json.dumps({"success": True, "rows": [dict(row) for row in rows]})
+                # Retrieve rows using the provided query, and save as a list of dictionaries
+                rows = connection.execute(text(query)).mappings().all()
+                rows = [dict(row) for row in rows]
+                return json.dumps({"success": True, "rows": rows})
         except Exception as e:
+            print("Error in query_database:", e)
             return json.dumps({"success": False, "error": str(e)})
-
-    {%- endif %}
+    {% endif %}
 
     def setup_client(self):
         configs = [
@@ -126,7 +122,8 @@ class Functions(Tools):
             try:
                 self.client = openai.OpenAI(api_key=api_key, base_url=config["base_url"])
                 return
-            except Exception:
+            except Exception as e:
+                print(f"Client {config['key_env']} failed: {e}")
                 continue
 
         raise RuntimeError("No valid API client could be set up.")

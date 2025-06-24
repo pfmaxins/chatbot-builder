@@ -68,12 +68,11 @@ def main():
     with st.sidebar:
         st.markdown('<div class="sidebar-content">', unsafe_allow_html=True)
         
-        # Auto-detect backend URL
-        {% if network.enabled %}
-        backend_url = f"http://{{ project_name }}:{{ services.app.internal_port }}"
-        {% else %}
-        backend_url = f"http://localhost:{{ services.app.internal_port }}"
-        {% endif %}
+        # Auto-detect backend URL (inside Docker, use service name; locally, use localhost)
+        if os.getenv("DOCKER_CONTAINER"):
+            backend_url = f"http://{{ project_name }}:{{ services.app.internal_port }}"
+        else:
+            backend_url = f"http://localhost:{{ services.app.internal_port }}"
         
         st.markdown("## 🔐 Session Info")
         st.text(f"Session: {st.session_state.conversation_key[:8]}...")

@@ -20,6 +20,12 @@ services:
     image: {{ services.redis.image }}
     ports:
       - "{{ services.redis.external_port }}:{{ services.redis.internal_port }}"
+{% if services.redis.data_persistence %}
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+{% endif %}
 {% if network.enabled %}
     networks:
       - {{ network.name }}
@@ -31,9 +37,8 @@ services:
     env_file:
       - {{ services.db.env_file }}
     volumes:
-{% for vol in services.db.volumes %}
-      - {{ vol }}
-{% endfor %}
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "{{ services.db.external_port }}:5432"
 {% if network.enabled %}
@@ -57,11 +62,14 @@ services:
 {% endif %}
 {% endif %}
 
-{% if services.db.enabled and not services.db.external %}
+{% if services.db.enabled and not services.db.external or services.redis.data_persistence %}
 volumes:
-{% for vname, vconf in volumes.items() %}
-  {{ vname }}: {{ vconf|tojson }}
-{% endfor %}
+{% if services.db.enabled and not services.db.external %}
+  postgres_data:
+{% endif %}
+{% if services.redis.data_persistence %}
+  redis_data:
+{% endif %}
 {% endif %}
 
 {% if network.enabled %}
