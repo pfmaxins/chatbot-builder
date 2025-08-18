@@ -1,0 +1,47 @@
+{
+  "project_name": "my_chatbot",
+  "system_prompt": "You are a helpful assistant.",
+  "services": {
+    "app": {
+      "internal_port": 8000,
+      "external_port": 8000,
+      "env_file": ".env",
+      "origins": ["*"]
+    },
+    "redis": {
+      "image": "redis:7",
+      "internal_port": 6379,
+      "external_port": 6379,
+      "data_persistence": false
+    },
+    "db": {
+      "enabled": false,
+      "external": false,
+      "image": "postgres:15",
+      "env_file": ".env.db",
+      "external_port": 5432
+    },
+    "vectorbase": {
+      "enabled": false
+    },
+    "vpn": {
+      "enabled": false
+    }
+  },
+  "frontend": {
+    "enabled": false,
+    "internal_port": 8501,
+    "external_port": 8501
+  },
+  "network": {
+    "enabled": false,
+    "name": "chatbot_network",
+    "external": false
+  },
+  "persistence": {
+    "redis": {
+      "enabled": false
+    }
+  }
+}
+
